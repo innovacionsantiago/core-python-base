@@ -75,18 +75,32 @@ jobs:
 
       - name: Install uv + project deps
         shell: bash
+        # V1 warn-only · si pip install -e falla (típicamente por deps locales no
+        # publicadas en PyPI · ej. illanes-auth, periodismo2-www en wave 8) caemos
+        # a instalar SOLO las dev tools (ruff/mypy/pytest/bandit). Lint+security
+        # scans corren igual; pytest skipea o falla warn-only en step posterior.
+        # Ramp: cuando libs locales se publiquen como packages (Wave 11+) este
+        # fallback se vuelve dead code y se puede endurecer a fail-on-error.
         run: |
           python -m pip install --upgrade pip
           pip install uv
+          install_ok=0
           if [ -f pyproject.toml ] && grep -q '\[project.optional-dependencies\]' pyproject.toml; then
-            pip install -e ".[dev]" || pip install -e .
+            if pip install -e ".[dev]"; then
+              install_ok=1
+            elif pip install -e .; then
+              install_ok=1
+            fi
           elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-            pip install ruff mypy pytest pytest-asyncio pytest-cov bandit
-          else
-            echo "::warning::No pyproject.toml ni requirements.txt en $WORKDIR"
-            pip install ruff mypy pytest pytest-cov bandit
+            if pip install -r requirements.txt; then
+              install_ok=1
+            fi
           fi
+          if [ "$install_ok" = "0" ]; then
+            echo "::warning::pip install -e . falló (posiblemente por deps locales no publicadas). Instalando solo dev tools como fallback V1."
+          fi
+          # Siempre asegurar dev tools instaladas (incluso si project install falló).
+          pip install ruff mypy pytest pytest-asyncio pytest-cov bandit
 
       - name: Ruff check (lint)
         shell: bash
