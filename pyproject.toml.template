@@ -1,0 +1,141 @@
+# core-python-base · pyproject.toml template (ADR-018)
+#
+# CÓMO USARLO:
+#   1. Copiar este archivo al raíz del proyecto como `pyproject.toml`
+#   2. Editar [project] name/description/dependencies para tu servicio
+#   3. Mantener [tool.ruff], [tool.black], [tool.pytest], [tool.coverage], [tool.mypy]
+#      como están — son la fuente de verdad del estándar.
+#   4. Si necesitás overrides, justificalos con un comentario.
+
+[project]
+name = "TODO-cambiá-este-nombre"
+version = "0.1.0"
+description = "TODO breve descripción del servicio"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # backend HTTP base (ajustá según necesidades)
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "gunicorn>=22.0",
+    # data
+    "sqlmodel>=0.0.16",
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "alembic>=1.13",
+    "redis>=5.0",
+    # observability
+    "structlog>=24.1",
+    "prometheus-client>=0.20",
+    "slowapi>=0.1.9",
+    "sentry-sdk>=2.0",
+    # auth (cuando aplica)
+    # "core-auth-lib @ file:///srv/projects/core/core-auth-lib",
+    # config
+    "pydantic-settings>=2.2",
+    "python-dotenv>=1.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "black>=24.4",
+    "mypy>=1.10",
+    "pytest>=8.1",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "pre-commit>=3.7",
+    "uv>=0.1.40",
+]
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ─────────────────────────────────────────────────────────────────────────
+# tooling: NO MODIFICAR sin coordinar con core-python-base/README.md
+# ─────────────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "B", "I", "UP", "SIM", "RUF", "C4", "PIE", "PT"]
+ignore = [
+    "E501",   # black handles line length
+    "E402",   # module-level import not at top (conftest setup)
+    "B008",   # FastAPI Depends in function args
+    "B904",   # raise from (incremental fix)
+    "T201",   # print() in scripts/tests
+    "PT004",  # fixture does not return anything
+    "SIM108", # ternary not always clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]
+"tests/**" = ["B011", "PT011"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "src"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+markers = [
+    "slow: tests slow (>1s)",
+    "integration: tests que tocan IO real (DB, network)",
+    "unit: unit puros, sin IO",
+]
+
+[tool.coverage.run]
+source = ["src", "app"]
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/__init__.py",
+    "*/migrations/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+fail_under = 60
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__",
+    "if TYPE_CHECKING",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+follow_imports = "normal"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# para servicios nuevos: cambiá a strict = true
+strict = false
+# excluir migraciones (Alembic genera código auto)
+exclude = [
+    "migrations/",
+    "alembic/",
+    "build/",
+    "dist/",
+]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false

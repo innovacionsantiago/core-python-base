@@ -1,0 +1,29 @@
+# core-python-base · ruff standalone config (ADR-018)
+#
+# Para proyectos sin pyproject.toml o que prefieran config separada.
+# Symlink: `ln -s /srv/projects/core/core-python-base/ruff.toml ./ruff.toml`
+# o copy: `cp /srv/projects/core/core-python-base/ruff.toml ./`
+#
+# Si usás pyproject.toml, NO necesitás este archivo — usá el template.
+
+line-length = 88
+target-version = "py310"
+
+[lint]
+select = ["E", "W", "F", "B", "I", "UP", "SIM", "RUF", "C4", "PIE", "PT"]
+ignore = [
+    "E501",
+    "E402",
+    "B008",
+    "B904",
+    "T201",
+    "PT004",
+    "SIM108",
+]
+
+[lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]
+"tests/**" = ["B011", "PT011"]
+
+[lint.isort]
+known-first-party = ["app", "src"]

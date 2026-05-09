@@ -1,0 +1,194 @@
+# core-python-base reusable Python CI workflow (ADR-018, ADR-034)
+#
+# Uso desde un repo consumidor:
+#   .github/workflows/ci.yml:
+#     name: CI
+#     on: [push, pull_request]
+#     jobs:
+#       ci:
+#         uses: innovacionsantiago/core-python-base/.github/workflows/ci-python.yml@main
+#         with:
+#           coverage_min: 60
+#           python_version: "3.12"
+#
+# Severity gates: ver ADR-034. CRITICAL bloquea merge; HIGH/MED/LOW report-only V1.
+# NOTA seguridad: este workflow NO usa contexto untrusted en run: blocks.
+# Solo usa inputs (controlados por caller) y github.run_id (constante runtime).
+
+name: ci-python (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      coverage_min:
+        description: "Coverage minimum percentage (pytest-cov fail-under)"
+        required: false
+        type: number
+        default: 60
+      validators_layers:
+        description: "cis-validators layers (csv: data,api,security,structure,contracts)"
+        required: false
+        type: string
+        default: "data,api,security,structure,contracts"
+      python_version:
+        description: "Python version (setup-python format)"
+        required: false
+        type: string
+        default: "3.12"
+      working_directory:
+        description: "Subdirectory to run from (relative to repo root)"
+        required: false
+        type: string
+        default: "."
+      skip_coverage_gate:
+        description: "Si true, no falla por coverage (warning only)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: lint+type+test+security
+    runs-on: ubuntu-latest
+    env:
+      WORKDIR: ${{ inputs.working_directory }}
+      COVERAGE_MIN: ${{ inputs.coverage_min }}
+      VALIDATORS_LAYERS: ${{ inputs.validators_layers }}
+      SKIP_COVERAGE_GATE: ${{ inputs.skip_coverage_gate }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          cache: pip
+
+      - name: Install uv + project deps
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          if [ -f pyproject.toml ] && grep -q '\[project.optional-dependencies\]' pyproject.toml; then
+            pip install -e ".[dev]" || pip install -e .
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+            pip install ruff mypy pytest pytest-asyncio pytest-cov bandit
+          else
+            echo "::warning::No pyproject.toml ni requirements.txt en $WORKDIR"
+            pip install ruff mypy pytest pytest-cov bandit
+          fi
+
+      - name: Ruff check (lint)
+        shell: bash
+        run: ruff check .
+
+      - name: Ruff format check
+        shell: bash
+        run: ruff format --check .
+
+      - name: Mypy (gradual · warning-only V1)
+        shell: bash
+        run: |
+          set +e
+          targets=""
+          [ -d src ] && targets="$targets src/"
+          [ -d app ] && targets="$targets app/"
+          if [ -z "$targets" ]; then
+            echo "::notice::No src/ ni app/ presentes, skipping mypy"
+            exit 0
+          fi
+          mypy --ignore-missing-imports --no-error-summary $targets 2>&1 | tee mypy-report.txt || true
+          echo "::notice::mypy gradual mode (no fail). Override en caller para gate strict."
+
+      - name: Pytest with coverage
+        shell: bash
+        run: |
+          if [ ! -d tests ] && [ ! -d test ]; then
+            echo "::warning::No tests/ directory, skipping pytest"
+            exit 0
+          fi
+          fail_arg=""
+          if [ "$SKIP_COVERAGE_GATE" != "true" ]; then
+            fail_arg="--cov-fail-under=$COVERAGE_MIN"
+          fi
+          pytest --cov --cov-report=xml --cov-report=term $fail_arg
+
+      - name: Bandit (security · report-only V1)
+        shell: bash
+        run: |
+          pip install bandit
+          targets=""
+          [ -d src ] && targets="$targets src/"
+          [ -d app ] && targets="$targets app/"
+          if [ -z "$targets" ]; then
+            echo '{"results":[]}' > bandit.json
+            exit 0
+          fi
+          bandit -r $targets -ll -f json -o bandit.json || true
+          if [ -f bandit.json ]; then
+            count=$(python -c "import json; print(len(json.load(open('bandit.json')).get('results',[])))" 2>/dev/null || echo 0)
+            echo "::notice::bandit findings: $count"
+          fi
+
+      - name: Install gitleaks
+        shell: bash
+        run: |
+          GITLEAKS_VERSION="8.18.4"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Gitleaks scan (report-only · redacted)
+        shell: bash
+        run: |
+          gitleaks detect --no-git --source . --redact --report-format json --report-path gitleaks.json --exit-code 0 || true
+          if [ -f gitleaks.json ]; then
+            count=$(python -c "import json,sys; d=json.load(open('gitleaks.json')); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
+            echo "::notice::gitleaks findings: $count"
+            if [ "$count" != "0" ] && [ "$count" != "" ]; then
+              echo "::warning::gitleaks detected $count potential secret(s). Review redacted artifact."
+            fi
+          fi
+
+      - name: cis-validators (placeholder · V1 skip)
+        shell: bash
+        run: |
+          echo "::notice::cis-validators-base aún no publicada como package. Skip en V1."
+          echo "::notice::Layers configurados: $VALIDATORS_LAYERS"
+          # TODO: cis-validators integration cuando lib publicada vía:
+          #   pip install git+ssh://git@github.com/innovacionsantiago/core-py-validators-base.git
+          # cis-validators run --layers "$VALIDATORS_LAYERS" --severity-fail critical
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: |
+            ${{ inputs.working_directory }}/coverage.xml
+            ${{ inputs.working_directory }}/.coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload security artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-${{ github.run_id }}
+          path: |
+            ${{ inputs.working_directory }}/bandit.json
+            ${{ inputs.working_directory }}/gitleaks.json
+            ${{ inputs.working_directory }}/mypy-report.txt
+          if-no-files-found: ignore
+          retention-days: 14
