@@ -90,10 +90,12 @@ jobs:
 
       - name: Ruff check (lint)
         shell: bash
+        continue-on-error: true  # V1 warn-only · ADR-018 gradual · ramp a fail cuando repos limpios
         run: ruff check .
 
       - name: Ruff format check
         shell: bash
+        continue-on-error: true  # V1 warn-only · ADR-018 gradual
         run: ruff format --check .
 
       - name: Mypy (gradual · warning-only V1)
