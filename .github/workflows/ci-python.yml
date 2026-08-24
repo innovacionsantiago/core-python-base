@@ -45,6 +45,11 @@ on:
         required: false
         type: boolean
         default: false
+      upload_artifacts:
+        description: "Si false, omite artifacts cuando el caller no tiene cuota disponible"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -188,7 +193,7 @@ jobs:
           # cis-validators run --layers "$VALIDATORS_LAYERS" --severity-fail critical
 
       - name: Upload coverage artifact
-        if: always()
+        if: ${{ always() && inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ github.run_id }}
@@ -199,7 +204,7 @@ jobs:
           retention-days: 14
 
       - name: Upload security artifacts
-        if: always()
+        if: ${{ always() && inputs.upload_artifacts }}
         uses: actions/upload-artifact@v4
         with:
           name: security-${{ github.run_id }}
