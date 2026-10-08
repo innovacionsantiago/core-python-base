@@ -159,3 +159,8 @@ está fijada al commit; en vps-cis también puedes instalar el wheel construido
 desde ese commit. El workflow instala la CLI Node desde el tarball vendorizado
 y ejecuta `cis-i18n check messages` antes de pytest, solo si existe
 `messages/es.json`. No existe una CLI Python con ese nombre.
+
+El checkout de CI necesita acceso de lectura a core-i18n privado para
+resolver la dependencia Git. Proporciona un token de lectura del grupo como
+`CORE_READ_TOKEN` (secret del workflow caller); el workflow reusable lo usa
+solo en actions/checkout. No se publican credenciales en archivos.

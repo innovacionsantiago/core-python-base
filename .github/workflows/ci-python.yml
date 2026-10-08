@@ -19,6 +19,10 @@ name: ci-python (reusable)
 
 on:
   workflow_call:
+    secrets:
+      CORE_READ_TOKEN:
+        description: "Token de lectura opcional para dependencias Git privadas del grupo"
+        required: false
     inputs:
       coverage_min:
         description: "Coverage minimum percentage (pytest-cov fail-under)"
@@ -71,6 +75,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.CORE_READ_TOKEN || github.token }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
