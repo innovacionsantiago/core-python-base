@@ -72,11 +72,13 @@ pre-commit run --all-files
 
 ## Cómo se usa en un proyecto nuevo
 
-`@cis/service-template` (cookiecutter, ADR-016) genera el scaffold ya con esto adoptado. Pero si lo creás manual:
+`@cis/service-template` (ADR-016) es un artefacto planeado, aún inexistente
+según core/CONTRACTS.md. Para crear un servicio manualmente:
 
 ```bash
 mkdir my-service && cd my-service
-cp /srv/projects/core/core-python-base/{.pre-commit-config.yaml,pyproject.toml.template} .
+cp /srv/projects/core/core-python-base/{.pre-commit-config.yaml,pyproject.toml.template,i18n.config.json} .
+cp -R /srv/projects/core/core-python-base/messages .
 mv pyproject.toml.template pyproject.toml
 # editá [project] name/description
 git init && pre-commit install
@@ -84,7 +86,7 @@ git init && pre-commit install
 
 ## Convenciones que esto impone
 
-- **Python 3.10+** (target). Servicios nuevos: 3.12 explícito.
+- **Python 3.11+** (target). Servicios nuevos: 3.12 explícito.
 - **Line length 88** (compatible black/ruff).
 - **isort dentro de ruff** — no instalar isort por separado.
 - **black como fallback de format** — ruff format es default; black queda para casos donde el equipo lo prefiera.
@@ -98,7 +100,7 @@ git init && pre-commit install
 
 - No es un paquete pypi-instalable. Es un repositorio de templates y archivos canónicos.
 - No prescribe estructura de directorios del código (`src/`, `app/`, etc. quedan a criterio del proyecto).
-- No incluye dependencias compartidas (ese es el rol de `core/py-common` cuando lo construyamos — ADR-016).
+- Incluye cis_i18n y Babel para idiomas; las demás dependencias compartidas se consultan en core/CONTRACTS.md.
 
 ## Estado de adopción (P0.4)
 
@@ -121,3 +123,39 @@ Marcar al adoptar. Track final en `STATUS.md` cuando los 8 estén verde.
 - ADR-018 (Python project standard) — formaliza este template.
 - ADR-019 (Error taxonomy + logging spec) — extiende con structlog convention.
 - ADR-025 (Service topology standard) — qué proyecto Python debería ser monolítico vs split.
+
+## Idiomas en proyectos nuevos
+
+Copia también `messages/` e `i18n.config.json` al crear un servicio. La lista
+habilitada inicial es `["es", "en"]`. Para ampliarla agrega códigos del
+[contrato canónico](../core-i18n/README.md#locales-y-rutas), traduce los
+catálogos base con Claude y pasa la configuración a los helpers. JSON no
+admite comentarios; las instrucciones de ampliación viven aquí.
+
+El catálogo mínimo contiene `app.name = "{name}"`: un parámetro de marca sin
+prosa que traducir, idéntico en los dos idiomas. Codex escribe solamente el
+español fuente. Cuando agregues textos, Claude completa los otros catálogos con
+`cis-i18n missing`, `merge` y `check`. No copies el español como traducción.
+El check bloquea si falta una clave en inglés, aunque el runtime use fallback.
+
+Node 22 es necesario para la CLI, también en servicios Python. El paquete no
+está publicado en npm: construye el commit 59123818f634 de core-i18n y copia su
+tarball privado en `vendor/cis-i18n-0.2.0.tgz` del consumidor, conservándolo
+en Git para que CI sea reproducible. El patrón `file:vendor/…` ya lo usa
+`cis-usaia/frontend-v2` para `@cis/github` y `@cis/browser-privacy`.
+No uses un checkout Node Git sin construir `dist/`.
+
+```sh
+mkdir -p vendor
+cp /srv/projects/core/core-i18n/.tmp/cis-i18n-0.2.0.tgz vendor/
+```
+
+Los textos visibles, metadatos y atributos accesibles se leen con el helper
+del stack; los formatos usan el locale y el HTML declara `lang` y `dir`.
+No se modifica el kit. Sigue el [canon de idiomas](../../CANON.md#idiomas-i18n-decisión-martín-2026-10-08).
+
+Python requiere 3.11 o posterior por cis_i18n. La dependencia privada Git
+está fijada al commit; en vps-cis también puedes instalar el wheel construido
+desde ese commit. El workflow instala la CLI Node desde el tarball vendorizado
+y ejecuta `cis-i18n check messages` antes de pytest, solo si existe
+`messages/es.json`. No existe una CLI Python con ese nombre.

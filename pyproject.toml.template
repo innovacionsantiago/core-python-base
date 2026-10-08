@@ -12,8 +12,11 @@ name = "TODO-cambiá-este-nombre"
 version = "0.1.0"
 description = "TODO breve descripción del servicio"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    # idiomas: paquete privado fijado al contrato de variantes regionales
+    "cis_i18n @ git+https://github.com/innovacionsantiago/core-i18n.git@59123818f634c7e48c47aff3dace49c37b8bf0c3#subdirectory=py",
+    "babel>=2.17,<3",
     # backend HTTP base (ajustá según necesidades)
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -62,7 +65,7 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "B", "I", "UP", "SIM", "RUF", "C4", "PIE", "PT"]
@@ -85,7 +88,7 @@ known-first-party = ["app", "src"]
 
 [tool.black]
 line-length = 88
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -120,7 +123,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 ignore_missing_imports = true
 follow_imports = "normal"
 warn_unused_configs = true
